@@ -103,6 +103,7 @@ public:
 	virtual ~DatabaseImpl() { fdb_database_destroy(db); }
 
 	Reference<Transaction> createTransaction() override;
+	Reference<Tenant> openTenant(const StringRef& tenantName) override;
 	void setDatabaseOption(FDBDatabaseOption option, Optional<StringRef> value = Optional<StringRef>()) override;
 	Future<int64_t> rebootWorker(const StringRef& address, bool check = false, int duration = 0) override;
 	Future<Void> forceRecoveryWithDataLoss(const StringRef& dcid) override;
@@ -115,8 +116,22 @@ private:
 	friend class API;
 };
 
+class TenantImpl : public Tenant, NonCopyable {
+	friend class DatabaseImpl;
+
+public:
+	virtual ~TenantImpl() { fdb_tenant_destroy(tenant); }
+	Reference<Transaction> createTransaction() override;
+
+private:
+	FDBTenant* tenant;
+
+	explicit TenantImpl(FDBDatabase* db, const StringRef& tenantName);
+};
+
 class TransactionImpl : public Transaction, private NonCopyable, public FastAllocated<TransactionImpl> {
 	friend class DatabaseImpl;
+	friend class TenantImpl;
 
 public:
 	virtual ~TransactionImpl() {
@@ -181,7 +196,69 @@ private:
 	FDBTransaction* tr;
 
 	explicit TransactionImpl(FDBDatabase* db);
+	explicit TransactionImpl(FDBTenant* tenant);
 };
+
+ACTOR Future<Void> tenantManagementCreateTenantImpl(Reference<Database> db, Key nameKey) {
+	state Reference<Transaction> tr = db->createTransaction();
+	state std::atomic_bool checkedExistence = false;
+	loop {
+		try {
+			tr->setOption(FDBTransactionOption::FDB_TR_OPTION_SPECIAL_KEY_SPACE_ENABLE_WRITES, StringRef());
+			if (!checkedExistence.load()) {
+				Optional<FDBStandalone<ValueRef>> existingTenant = wait(tr->get(nameKey));
+				if (existingTenant.present()) {
+					throw tenant_already_exists();
+				}
+				checkedExistence = true;
+				tr->set(nameKey, ValueRef());
+			}
+			tr->set(nameKey, ValueRef());
+			wait(tr->commit());
+			return Void();
+		} catch (Error& e) {
+			state Error err(e);
+			wait(tr->onError(err));
+		}
+	}
+}
+
+Future<Void> TenantManagement::createTenant(Reference<Database> db, const StringRef& name) {
+	StringRef tenantName =
+	    StringRef((const uint8_t*)tenantManagementMapPrefix.data(), tenantManagementMapPrefix.size());
+	Key tenantNameKey = tenantName.withSuffix(name);
+	return tenantManagementCreateTenantImpl(db, tenantNameKey);
+}
+
+ACTOR Future<Void> tenantManagementDeleteTenantImpl(Reference<Database> db, Key nameKey) {
+	state Reference<Transaction> tr = db->createTransaction();
+	state std::atomic_bool checkedExistence = false;
+	loop {
+		try {
+			tr->setOption(FDBTransactionOption::FDB_TR_OPTION_SPECIAL_KEY_SPACE_ENABLE_WRITES, StringRef());
+			if (!checkedExistence.load()) {
+				Optional<FDBStandalone<ValueRef>> existingTenant = wait(tr->get(nameKey));
+				if (!existingTenant.present()) {
+					throw tenant_not_found();
+				}
+				checkedExistence = true;
+			}
+			tr->clear(nameKey);
+			wait(tr->commit());
+			return Void();
+		} catch (Error& e) {
+			state Error err(e);
+			wait(tr->onError(err));
+		}
+	}
+}
+
+Future<Void> TenantManagement::deleteTenant(Reference<Database> db, const StringRef& name) {
+	StringRef tenantName =
+	    StringRef((const uint8_t*)tenantManagementMapPrefix.data(), tenantManagementMapPrefix.size());
+	Key tenantNameKey = tenantName.withSuffix(name);
+	return tenantManagementDeleteTenantImpl(db, tenantNameKey);
+}
 
 static inline void throw_on_error(fdb_error_t e) {
 	if (e)
@@ -285,6 +362,10 @@ Reference<Transaction> DatabaseImpl::createTransaction() {
 	return Reference<Transaction>(new TransactionImpl(db));
 }
 
+Reference<Tenant> DatabaseImpl::openTenant(const StringRef& tenantName) {
+	return Reference<Tenant>(new TenantImpl(db, tenantName));
+}
+
 void DatabaseImpl::setDatabaseOption(FDBDatabaseOption option, Optional<StringRef> value) {
 	if (value.present())
 		throw_on_error(fdb_database_set_option(db, option, value.get().begin(), value.get().size()));
@@ -320,8 +401,20 @@ Future<Void> DatabaseImpl::createSnapshot(const StringRef& uid, const StringRef&
 	    });
 }
 
+TenantImpl::TenantImpl(FDBDatabase* db, const StringRef& tenantName) {
+	throw_on_error(fdb_database_open_tenant(db, tenantName.begin(), tenantName.size(), &tenant));
+}
+
+Reference<Transaction> TenantImpl::createTransaction() {
+	return Reference<Transaction>(new TransactionImpl(tenant));
+}
+
 TransactionImpl::TransactionImpl(FDBDatabase* db) {
 	throw_on_error(fdb_database_create_transaction(db, &tr));
+}
+
+TransactionImpl::TransactionImpl(FDBTenant* tenant) {
+	throw_on_error(fdb_tenant_create_transaction(tenant, &tr));
 }
 
 void TransactionImpl::setReadVersion(Version v) {

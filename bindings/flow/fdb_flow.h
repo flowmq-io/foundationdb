@@ -57,7 +57,7 @@ private:
 
 class ReadTransaction : public ReferenceCounted<ReadTransaction> {
 public:
-	virtual ~ReadTransaction(){};
+	virtual ~ReadTransaction() {};
 	virtual void setReadVersion(Version v) = 0;
 	virtual Future<Version> getReadVersion() = 0;
 
@@ -135,14 +135,39 @@ public:
 	virtual Future<FDBStandalone<StringRef>> getVersionstamp() = 0;
 };
 
+class Tenant : public ReferenceCounted<Tenant> {
+public:
+	virtual ~Tenant() {};
+	virtual Reference<Transaction> createTransaction() = 0;
+};
+
 class Database : public ReferenceCounted<Database> {
 public:
-	virtual ~Database(){};
+	virtual ~Database() {};
 	virtual Reference<Transaction> createTransaction() = 0;
+	virtual Reference<Tenant> openTenant(const StringRef& tenantName) = 0;
 	virtual void setDatabaseOption(FDBDatabaseOption option, Optional<StringRef> value = Optional<StringRef>()) = 0;
 	virtual Future<int64_t> rebootWorker(const StringRef& address, bool check = false, int duration = 0) = 0;
 	virtual Future<Void> forceRecoveryWithDataLoss(const StringRef& dcid) = 0;
 	virtual Future<Void> createSnapshot(const StringRef& uid, const StringRef& snap_command) = 0;
+};
+
+// This impl of TenantManagement follows the binding of java (com.apple.foundationdb.TenantManagement)
+//
+// Some other impl inside foundationdb:
+//
+// - fdbcli/TenantCommands.actor.cpp
+// - fdbclient/include/fdbclient/TenantManagement.actor.h
+// - bindings/c/test/fdb_api.hpp
+struct TenantManagement {
+	// TODO
+	// static void createTenant(Reference<Transaction> tr, const StringRef& name)
+	static Future<Void> createTenant(Reference<Database> db, const StringRef& name);
+	static Future<Void> deleteTenant(Reference<Database> db, const StringRef& name);
+
+private:
+	// This should only be mutated by API versioning
+	static inline const std::string_view tenantManagementMapPrefix = "\xff\xff/management/tenant/map/";
 };
 
 class API {
