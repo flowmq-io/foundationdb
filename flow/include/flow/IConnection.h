@@ -25,6 +25,7 @@
 #include <limits>
 
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl.hpp>
 
 #include "flow/Knobs.h"
 #include "flow/NetworkAddress.h"
@@ -89,6 +90,7 @@ public:
 	virtual bool isStableConnection() const { throw unsupported_operation(); }
 
 	virtual boost::asio::ip::tcp::socket& getSocket() = 0;
+    virtual SSL* getSSLHandle() { return nullptr; }
 };
 
 class IListener {
