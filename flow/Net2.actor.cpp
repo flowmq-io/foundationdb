@@ -1156,6 +1156,7 @@ public:
 	tcp::socket& getSocket() override { return socket; }
 
 	ssl_socket& getSSLSocket() { return ssl_sock; }
+    SSL* getSSLHandle() override { return ssl_sock.native_handle(); }
 
 private:
 	UID id;
