@@ -2834,6 +2834,7 @@ public:
 		(void)ifaddr;
 		(void)mcaddr;
 	}
+	void setOptionBroadcast(bool enable) override { (void)enable; }
 
 	NetworkAddress localAddress() const override { return _localAddress; }
 

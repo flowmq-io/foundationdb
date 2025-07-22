@@ -719,6 +719,16 @@ public:
 		}
 	}
 
+	void setOptionBroadcast(bool enable) override {
+		boost::system::error_code ec;
+		socket.set_option(boost::asio::socket_base::broadcast(enable), ec);
+		if (ec) {
+			Error x = invalid_option_value();
+			TraceEvent(SevWarnAlways, "Net2UDPSetOptBroadcastError").error(x);
+			throw x;
+		}
+	}
+
 	void bind(NetworkAddress const& addr) override {
 		boost::system::error_code ec;
 		socket.bind(udpEndpoint(addr), ec);

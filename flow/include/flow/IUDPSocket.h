@@ -42,7 +42,8 @@ public:
 	virtual void bind(NetworkAddress const& addr) = 0;
 	virtual void setOptionReuseAddress(bool reuse) = 0;
 	virtual void setOptionMulticastGroup(NetworkAddress const& ifaddr, NetworkAddress const& mcaddr) = 0;
-	virtual void setOptionEnableLoopback(bool reuse) = 0;
+	virtual void setOptionEnableLoopback(bool enable) = 0;
+	virtual void setOptionBroadcast(bool enable) = 0;
 
 	virtual UID getDebugID() const = 0;
 	virtual NetworkAddress localAddress() const = 0;
