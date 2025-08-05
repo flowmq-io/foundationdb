@@ -912,7 +912,7 @@ template <class T>
 class Promise;
 
 template <class T>
-class Future {
+class [[nodiscard]] Future {
 public:
 	T const& get() const { return sav->get(); }
 	T getValue() const { return get(); }
