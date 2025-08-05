@@ -988,7 +988,7 @@ class SWIFT_SENDABLE
 SWIFT_CONFORMS_TO_PROTOCOL(flow_swift.FlowFutureOps)
 #endif
 #endif
-    Future {
+    [[nodiscard]] Future {
 public:
 	using Element = T;
 #ifdef WITH_SWIFT
