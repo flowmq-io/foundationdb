@@ -33,6 +33,8 @@
 #include "flow/IRandom.h"
 #include "flow/ProtocolVersion.h"
 #include "flow/WriteOnlySet.h"
+#include <boost/asio.hpp>
+#include "boost/asio/ssl.hpp"
 
 class Void;
 
@@ -237,6 +239,8 @@ public:
 
 	virtual const TLSConfig& getTLSConfig() const = 0;
 	// Return the TLS Configuration
+
+    virtual void addSSLContextCallback(std::function<void(boost::asio::ssl::context&)> fn) {}
 
 	virtual void getDiskBytes(std::string const& directory, int64_t& free, int64_t& total) = 0;
 	// Gets the number of free and total bytes available on the disk which contains directory

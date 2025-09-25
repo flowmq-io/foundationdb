@@ -124,6 +124,18 @@ Net2* g_net2 = nullptr;
 
 thread_local INetwork* thread_network = 0;
 
+ACTOR static void SSLContextCallbackImpl(
+    AsyncVar<Reference<ReferencedObject<boost::asio::ssl::context>>>* sslContextVar,
+    std::function<void(boost::asio::ssl::context&)> fn) {
+	loop {
+		wait(sslContextVar->onChange());
+		auto var = sslContextVar->get();
+		if (var) {
+			fn(var->mutate());
+		}
+	}
+}
+
 class Net2 final : public INetwork, public INetworkConnections {
 
 private:
@@ -212,6 +224,10 @@ public:
 	std::vector<flowGlobalType> globals;
 
 	const TLSConfig& getTLSConfig() const override { return tlsConfig; }
+
+    void addSSLContextCallback(std::function<void(boost::asio::ssl::context&)> fn) override {
+        SSLContextCallbackImpl(&sslContextVar, fn);
+    }
 
 	bool checkRunnable() override;
 
