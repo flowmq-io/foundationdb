@@ -22,6 +22,18 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/workloads)
 
 add_flow_target(EXECUTABLE NAME fdbserver SRCS ${FDBSERVER_SRCS})
 
+# Library target for embedding fdbserver in FlowMQ sim2
+set(FDBSERVER_LIB_SRCS ${FDBSERVER_SRCS})
+list(FILTER FDBSERVER_LIB_SRCS EXCLUDE REGEX "fdbserver\\.actor\\.cpp$")
+add_flow_target(STATIC_LIBRARY NAME fdbserver_lib SRCS ${FDBSERVER_LIB_SRCS})
+target_include_directories(fdbserver_lib PRIVATE
+  ${CMAKE_SOURCE_DIR}/bindings/c
+  ${CMAKE_BINARY_DIR}/bindings/c
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_BINARY_DIR}/include)
+target_link_libraries(fdbserver_lib PRIVATE fdbclient metacluster sqlite)
+target_link_libraries(fdbserver_lib PRIVATE toml11_target rapidjson)
+
 if (WITH_SWIFT)
   # Setup the Swift sources in FDBServer.
   include(FindSwiftLibs)
